@@ -1,0 +1,409 @@
+-- Force CoreGui to load
+if not game:GetService("CoreGui") then
+    game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
+    wait(1)
+end
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Your player
+local player = Players.LocalPlayer
+
+-- Utility module from the game (for SetSpeedCap and multipliers)
+local Util = require(ReplicatedStorage.Modules.Util)
+
+-- Main GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ForsakenHub_PizzaESP"
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 250, 0, 520)  -- Increased height to fit all buttons
+Frame.Position = UDim2.new(0.8, -125, 0.5, -260)  -- Adjusted position for new size
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+Frame.BorderSizePixel = 0
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Frame
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Text = "FORSKEN HUB"
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.Parent = Frame
+
+-- Close button
+local CloseButton = Instance.new("TextButton")
+CloseButton.Text = "X"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -30, 0, 0)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.TextColor3 = Color3.new(1, 1, 1)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = Frame
+
+-- Status label
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Text = "Status: Ready"
+StatusLabel.Size = UDim2.new(0.9, 0, 0, 30)
+StatusLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextColor3 = Color3.new(0, 1, 0)
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = Frame
+
+-- Reopen notification
+local ReopenNotification = Instance.new("TextLabel")
+ReopenNotification.Text = "Press [K] to reopen menu"
+ReopenNotification.Size = UDim2.new(0, 200, 0, 40)
+ReopenNotification.Position = UDim2.new(0, 10, 0, 10)
+ReopenNotification.BackgroundTransparency = 1
+ReopenNotification.TextColor3 = Color3.new(1, 1, 1)
+ReopenNotification.TextSize = 18
+ReopenNotification.TextXAlignment = Enum.TextXAlignment.Left
+ReopenNotification.Visible = false
+ReopenNotification.Parent = ScreenGui
+
+-- Button factory
+local function createButton(text, posY, color)
+    local btn = Instance.new("TextButton")
+    btn.Text = text
+    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.Position = UDim2.new(0.05, 0, posY, 0)
+    btn.BackgroundColor3 = color or Color3.fromRGB(100, 100, 100)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = Frame
+    return btn
+end
+
+-- Status helper
+local function setStatus(msg, color)
+    StatusLabel.Text = "Status: " .. msg
+    StatusLabel.TextColor3 = color or Color3.new(0, 1, 0)
+end
+
+-- Killers exact paths for ESP
+local killerPaths = {
+    workspace.Players.Killers:FindFirstChild("c00lkidd"),
+    workspace.Players.Killers:FindFirstChild("JohnDoe"),
+    workspace.Players.Killers:FindFirstChild("Noli"),
+    workspace.Players.Killers:FindFirstChild("Jason"),
+    workspace.Players.Killers:FindFirstChild("1x1x1x1"),
+}
+-- ESP tables
+local PlayerESP = {Enabled = false, Handles = {}}
+local ZombieESP = {Enabled = false, Handles = {}}
+local PizzaESP = {Enabled = false, Handles = {}}
+local GeneratorESP = {Enabled = false, Handles = {}}
+local ItemESP = {Enabled = false, Handles = {}}
+local LockOn = {Enabled = false, Active = false, Killer = nil, Connection = nil}
+
+-- ===== Player ESP =====
+local function isKillerPlayer(player)
+    for _, killerModel in pairs(killerPaths) do
+        if killerModel and player.Character == killerModel then
+            return true
+        end
+    end
+    return false
+end
+
+local function updatePlayerESP()
+    for player, data in pairs(PlayerESP.Handles) do
+        if data.Highlight then data.Highlight:Destroy() end
+        if data.Text then data.Text:Remove() end
+        if data.Connection then data.Connection:Disconnect() end
+    end
+    PlayerESP.Handles = {}
+
+    if PlayerESP.Enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer and player.Character then
+                local isKiller = isKillerPlayer(player)
+                local color = isKiller and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
+
+                local highlight = Instance.new("Highlight")
+                highlight.Adornee = player.Character
+                highlight.FillColor = color
+                highlight.OutlineColor = Color3.new(0,0,0)
+                highlight.Parent = player.Character
+
+                local text = Drawing.new("Text")
+                text.Text = player.Name .. (isKiller and " [KILLER]" or " [SURVIVOR]")
+                text.Size = 16
+                text.Color = color
+                text.Outline = true
+                text.Center = true
+
+                local conn
+                conn = RunService.RenderStepped:Connect(function()
+                    if not PlayerESP.Enabled or not player.Character then
+                        highlight:Destroy()
+                        text:Remove()
+                        conn:Disconnect()
+                        PlayerESP.Handles[player] = nil
+                        return
+                    end
+                    local root = player.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+                        text.Visible = onScreen
+                        if onScreen then
+                            text.Position = Vector2.new(pos.X, pos.Y)
+                        end
+                    end
+                end)
+
+                PlayerESP.Handles[player] = {Highlight = highlight, Text = text, Connection = conn}
+            end
+        end
+    end
+end
+
+-- ===== Zombie ESP =====
+local function updateZombieESP()
+    for obj, data in pairs(ZombieESP.Handles) do
+        if data.Highlight then data.Highlight:Destroy() end
+        if data.Text then data.Text:Remove() end
+        if data.Connection then data.Connection:Disconnect() end
+    end
+    ZombieESP.Handles = {}
+
+    if ZombieESP.Enabled then
+        for _, zombie in pairs(workspace:GetDescendants()) do
+            if zombie:IsA("Model") and zombie.Name == "1x1x1x1Zombie" then
+                local highlight = Instance.new("Highlight")
+                highlight.Adornee = zombie
+                highlight.FillColor = Color3.fromRGB(255, 50, 50)
+                highlight.OutlineColor = Color3.new(0,0,0)
+                highlight.Parent = zombie
+
+                local text = Drawing.new("Text")
+                text.Text = "ZOMBIE"
+                text.Size = 18
+                text.Color = Color3.fromRGB(255, 100, 100)
+                text.Outline = true
+                text.Center = true
+
+                local conn
+                conn = RunService.RenderStepped:Connect(function()
+                    if not ZombieESP.Enabled or not zombie.Parent then
+                        highlight:Destroy()
+                        text:Remove()
+                        conn:Disconnect()
+                        ZombieESP.Handles[zombie] = nil
+                        return
+                    end
+
+                    local root = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Torso")
+                    if root then
+                        local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+                        text.Visible = onScreen
+                        if onScreen then
+                            text.Position = Vector2.new(pos.X, pos.Y - 30)
+                        end
+                    end
+                end)
+
+                ZombieESP.Handles[zombie] = {Highlight = highlight, Text = text, Connection = conn}
+            end
+        end
+    end
+end
+                end)
+
+                GeneratorESP.Handles[gen] = {Highlight = highlight, Text = text, Connection = conn}
+            end
+        end
+    end
+end
+
+-- ===== Item ESP =====
+local function getItems()
+    local items = {}
+    local map = workspace.Map and workspace.Map.Ingame and workspace.Map.Ingame.Map
+    if not map then return items end
+
+    local paths = {
+        map:FindFirstChild("Medkit") and map.Medkit:FindFirstChild("ItemRoot"),
+        map:FindFirstChild("BloxyCola") and map.BloxyCola:FindFirstChild("ItemRoot"),
+        map:GetChildren()[14] and map:GetChildren()[14]:FindFirstChild("ItemRoot"),
+    }
+
+    for _, itemRoot in pairs(paths) do
+        if itemRoot then
+            table.insert(items, itemRoot)
+        end
+    end
+
+    return items
+end
+
+local function getItemDisplayName(itemRoot)
+    local lname = itemRoot.Name:lower()
+    if lname:find("medkit") then
+        return "MEDKIT"
+    elseif lname:find("cola") then
+        return "COLA"
+    else
+        return itemRoot.Name:upper()
+    end
+end
+
+local function isItemInInventory(itemRoot)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Backpack and player.Backpack:FindFirstChild(itemRoot.Name) then
+            return true
+        end
+        if player.Character and player.Character:FindFirstChild(itemRoot.Name) then
+            return true
+        end
+    end
+    return false
+end
+
+local function updateItemESP()
+    for item, data in pairs(ItemESP.Handles) do
+        if data.Highlight then data.Highlight:Destroy() end
+        if data.Text then data.Text:Remove() end
+        if data.Connection then data.Connection:Disconnect() end
+    end
+    ItemESP.Handles = {}
+
+    if ItemESP.Enabled then
+        local items = getItems()
+        for _, itemRoot in pairs(items) do
+            if itemRoot and itemRoot.Parent then
+                local highlight = Instance.new("Highlight")
+                highlight.Adornee = itemRoot
+                highlight.FillColor = Color3.fromRGB(255, 215, 0)
+                highlight.OutlineColor = Color3.new(0,0,0)
+                highlight.Parent = itemRoot
+
+                local text = Drawing.new("Text")
+                text.Text = getItemDisplayName(itemRoot)
+                text.Size = 18
+                text.Color = Color3.fromRGB(255, 215, 0)
+                text.Outline = true
+                text.Center = true
+
+                local conn
+                conn = RunService.RenderStepped:Connect(function()
+                    if not ItemESP.Enabled or not itemRoot.Parent or isItemInInventory(itemRoot) then
+                        highlight:Destroy()
+                        text:Remove()
+                        conn:Disconnect()
+                        ItemESP.Handles[itemRoot] = nil
+                        return
+                    end
+                    local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(itemRoot.Position)
+                    text.Visible = onScreen
+                    if onScreen then
+                        text.Position = Vector2.new(pos.X, pos.Y - 30)
+                    end
+                end)
+
+                ItemESP.Handles[itemRoot] = {Highlight = highlight, Text = text, Connection = conn}
+            end
+        end
+    end
+end
+
+-- ===== Infinite Stamina =====
+    {name = "REMOVE SLOWNESS", toggle = nil, pos = 0.66},  -- Remove slowness button, no toggle state
+}
+
+local espButtons = {}
+
+for _, data in ipairs(buttonsData) do
+    local btn = createButton(data.name, data.pos, Color3.fromRGB(100, 100, 100))
+    espButtons[data.name] = btn
+
+    if data.toggle then
+        btn.MouseButton1Click:Connect(function()
+            data.toggle.Enabled = not data.toggle.Enabled
+
+            if data.name == "PLAYER ESP" then
+                updatePlayerESP()
+            elseif data.name == "ZOMBIE ESP" then
+                updateZombieESP()
+            elseif data.name == "PIZZA ESP" then
+                updatePizzaESP()
+            elseif data.name == "GENERATOR ESP" then
+                updateGeneratorESP()
+            elseif data.name == "ITEM ESP" then
+                updateItemESP()
+            elseif data.name == "INFINITE STAMINA" then
+                updateStamina()
+            elseif data.name == "LOCK ON KILLER" then
+                if data.toggle.Enabled then
+                    lockOnKiller()
+                else
+                    if LockOn.Connection then LockOn.Connection:Disconnect() end
+                    LockOn.Active = false
+                    setStatus("Lock Off", Color3.fromRGB(200, 200, 200))
+                end
+            end
+
+            btn.BackgroundColor3 = data.toggle.Enabled and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(100, 100, 100)
+        end)
+    else
+        -- Special case: Remove Slowness button with no toggle state
+        btn.MouseButton1Click:Connect(function()
+            RemoveSlowness(player)
+            setStatus("Slowness removed", Color3.fromRGB(0, 1, 0))
+            btn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+            wait(1)
+            btn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        end)
+    end
+end
+
+-- ===== Toggle GUI =====
+local guiVisible = true
+
+CloseButton.MouseButton1Click:Connect(function()
+    guiVisible = false
+    Frame.Visible = false
+    ReopenNotification.Visible = true
+end)
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.K then
+        guiVisible = not guiVisible
+        Frame.Visible = guiVisible
+        ReopenNotification.Visible = not guiVisible
+    elseif input.KeyCode == Enum.KeyCode.R then
+        -- Also support R key for lock on killer toggle for convenience
+        if espButtons["LOCK ON KILLER"] then
+            espButtons["LOCK ON KILLER"]:MouseButton1Click()
+        end
+    end
+end)
+
+-- Run ESP update loops
+RunService.RenderStepped:Connect(function()
+    if PlayerESP.Enabled then updatePlayerESP() end
+    if ZombieESP.Enabled then updateZombieESP() end
+    if PizzaESP.Enabled then updatePizzaESP() end
+    if GeneratorESP.Enabled then updateGeneratorESP() end
+    if ItemESP.Enabled then updateItemESP() end
+end)
+
+setStatus("Ready", Color3.fromRGB(0, 1, 0))
