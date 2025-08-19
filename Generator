@@ -1,0 +1,56 @@
+-- GUI Button Setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = game:GetService("CoreGui")
+
+local button = Instance.new("TextButton")
+button.Parent = screenGui
+button.Size = UDim2.new(0, 140, 0, 50)
+button.Position = UDim2.new(0.8, -70, 0.8, -25)
+button.Text = "Skillcheck"
+button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+button.TextColor3 = Color3.new(1, 1, 1)
+button.Font = Enum.Font.SourceSansBold
+button.TextSize = 18
+button.Draggable = true
+
+-- VARIABEL GENERATOR YANG DI-INTERACT
+local currentGen = nil
+
+-- Hook generator terakhir saat kita interaksi manual
+for _, map in pairs(workspace.Map.Ingame.Map:GetChildren()) do
+    if map:IsA("Model") and map.Name == "Generator" and map:FindFirstChild("Remotes") then
+        local remotes = map.Remotes
+        local rf = remotes:WaitForChild("RF")
+
+        -- hook fungsi enter supaya tahu generator yang kita pegang
+        local oldInvoke
+        oldInvoke = hookfunction(rf.InvokeServer, function(self, ...)
+            local args = {...}
+            if tostring(args[1]) == "enter" then
+                currentGen = map
+            end
+            return oldInvoke(self, unpack(args))
+        end)
+    end
+end
+
+-- Fungsi: kirim skillcheck saja
+local function doSkillcheck()
+    if not currentGen then
+        warn("Belum ada generator yang di-interact!")
+        return
+    end
+
+    local remotes = currentGen:WaitForChild("Remotes")
+    local RE = remotes:WaitForChild("RE")
+
+    -- ⚠️ isi argumen di FireServer sesuai hasil dari RemoteSpy
+    RE:FireServer("local args = {}
+
+workspace:WaitForChild("Map", 9e9):WaitForChild("Ingame", 9e9):WaitForChild("Map", 9e9):GetChildren()[14]:WaitForChild("Remotes", 9e9):WaitForChild("RE", 9e9):FireServer(unpack(args))") 
+end
+
+-- Klik tombol = kirim skillcheck
+button.MouseButton1Click:Connect(function()
+    doSkillcheck()
+end)
